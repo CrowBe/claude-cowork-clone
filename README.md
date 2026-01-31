@@ -18,27 +18,115 @@ This project aims to create a flexible cowork environment where users can collab
 - Conversation persistence and history
 - Context management across sessions
 
+## Tech Stack
+
+- **Framework:** Next.js 15 (App Router)
+- **UI:** React 19, Tailwind CSS, shadcn/ui, assistant-ui
+- **LLM Integration:** Vercel AI SDK v4
+- **Storage:** IndexedDB (browser-native, no server database)
+
 ## Project Structure
 
 ```
 claude-cowork-clone/
-├── docs/               # Documentation, user stories, and development plans
-├── src/                # Source code (TBD)
-├── tests/              # Test files (TBD)
+├── docs/                   # Documentation
+│   ├── architecture/       # Architecture Decision Records (ADRs)
+│   ├── user-stories/       # Feature requirements
+│   └── dev-plans/          # Implementation plans
+├── src/
+│   ├── app/                # Next.js pages and API routes
+│   ├── components/         # React components
+│   ├── lib/                # Framework-agnostic business logic
+│   ├── hooks/              # React hooks
+│   └── types/              # TypeScript definitions
+├── tests/                  # Test files
 └── README.md
 ```
 
 ## Supported LLM Backends
 
-### Anthropic Claude
-Requires an Anthropic Pro subscription. Uses the official Anthropic API.
+| Provider | Type | API Key Required |
+|----------|------|------------------|
+| **Ollama** | Local | No |
+| **Anthropic Claude** | Cloud | Yes |
 
-### Ollama
-Run LLMs locally using [Ollama](https://ollama.ai/). Supports various open-source models like Llama, Mistral, and others.
+## Local Development
 
-## Getting Started
+### Prerequisites
 
-*Coming soon - project is in planning phase*
+- **Node.js 22+**
+- **pnpm** (recommended) or npm
+- **Ollama** - For local LLM inference
+
+### Quick Start
+
+```bash
+# Clone the repository
+git clone https://github.com/CrowBe/claude-cowork-clone.git
+cd claude-cowork-clone
+
+# Install dependencies
+pnpm install
+
+# Copy environment template
+cp .env.example .env.local
+
+# Start the development server
+pnpm dev
+```
+
+The app runs at `http://localhost:3000`.
+
+### Setting Up Ollama (Local LLM)
+
+Ollama lets you run LLMs locally without API keys or cloud dependencies.
+
+```bash
+# Install Ollama
+# macOS
+brew install ollama
+
+# Linux
+curl -fsSL https://ollama.ai/install.sh | sh
+
+# Windows - download from https://ollama.ai
+
+# Start Ollama server
+ollama serve
+
+# Pull a model (in a new terminal)
+ollama pull llama3.2
+```
+
+The app will automatically detect Ollama at `http://localhost:11434`.
+
+### Setting Up Claude (Optional)
+
+To use Anthropic's Claude:
+
+1. Get an API key from [console.anthropic.com](https://console.anthropic.com)
+2. Add to `.env.local`:
+   ```
+   ANTHROPIC_API_KEY=sk-ant-...
+   ```
+
+### Development Commands
+
+```bash
+pnpm dev          # Start dev server with hot reload
+pnpm build        # Production build
+pnpm test         # Run unit tests
+pnpm test:e2e     # Run E2E tests
+pnpm lint         # Lint code
+pnpm typecheck    # Type check
+```
+
+### Environment Variables
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `ANTHROPIC_API_KEY` | No | Anthropic API key for Claude |
+| `OLLAMA_BASE_URL` | No | Ollama URL (default: `http://localhost:11434`) |
 
 ## Documentation
 
