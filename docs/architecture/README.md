@@ -15,6 +15,10 @@ This directory contains architectural decisions, system design documents, and te
 | [ADR-001](./adr-001-llm-sdk-selection.md) | LLM SDK Selection (Vercel AI SDK) | Approved |
 | [ADR-002](./adr-002-markdown-memory-storage.md) | Markdown Memory Storage (IndexedDB + Export) | Approved |
 | [ADR-003](./adr-003-chat-ui-library.md) | Chat UI Library (assistant-ui + MCP Apps) | Approved |
+| [ADR-004](./adr-004-conversation-storage.md) | Conversation History Storage (JSON/IndexedDB) | Approved |
+| [ADR-005](./adr-005-context-management.md) | Context Management (Sliding Window) | Approved |
+| [ADR-006](./adr-006-system-prompts.md) | System Prompts and AI Personality | Approved |
+| [ADR-007](./adr-007-api-schema.md) | API Response Schema | Approved |
 
 ## Key Architectural Goals
 
