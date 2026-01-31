@@ -2,7 +2,8 @@
 
 **Status:** Approved
 **Date:** 2025-01-31
-**Decision:** Use markdown files as the storage format for user memory and preferences
+**Updated:** 2025-01-31
+**Decision:** Use IndexedDB with markdown format, with prominent export/import for portability
 
 ## Context
 
@@ -15,109 +16,138 @@ We are building a suggested prompts feature that learns from user behavior over 
 
 We need a storage solution that:
 
-1. Works across desktop (local filesystem) and web (cloud storage) deployments
+1. Works in web browsers without requiring user accounts
 2. Aligns with our transparency-first design philosophy
-3. Is portable and user-controllable
-4. Supports future account-based sync without major rewrites
-5. Leverages the tool's inherent document capabilities
+3. Is portable and user-controllable (no lock-in)
+4. Supports future cloud sync without major rewrites
+5. Uses human-readable markdown format for transparency
+
+### Target Audience
+
+Our users are individuals and small businesses looking to optimize day-to-day actions. They are:
+
+- **Not developers** (no git, no technical file management)
+- **Google/Microsoft users** (familiar with Drive, OneDrive, Docs, Sheets)
+- **Productivity-focused** (want tools that "just work")
+
+This influences our storage strategy toward simplicity with optional cloud integration.
 
 ## Design Principle: Transparency First
 
-A core principle of this project is that users should always understand what the system knows about them. Traditional approaches (localStorage, IndexedDB, SQLite) store data in formats that are opaque to users. We want users to be able to:
+A core principle of this project is that users should always understand what the system knows about them. We want users to be able to:
 
 - **See** exactly what's being remembered
 - **Understand** why they're getting specific suggestions
 - **Edit** their preferences directly if desired
-- **Export** their data trivially (it's just files)
+- **Export** their data trivially (download as files)
 - **Trust** the system because nothing is hidden
+
+## Browser Storage Landscape
+
+### Storage Limits
+
+| Storage Type | Limit | Eviction Risk |
+|-------------|-------|---------------|
+| localStorage | 5-10 MB | High (cleared with site data) |
+| IndexedDB | 50% of disk (Chrome), 2GB (Firefox) | Medium (can request persistence) |
+| OPFS | Same as IndexedDB | Medium (newer API) |
+
+### Key Insight: Size Is Not the Constraint
+
+Our memory files are small (~300KB after a year of heavy use). The real risks are:
+
+1. **Browser eviction** - Data can disappear without warning
+2. **User clears browsing data** - Common action
+3. **Switching browsers/devices** - No automatic sync
+
+This is why **export/import and backup reminders are critical**, not optional.
 
 ## Options Considered
 
-### Option 1: Markdown Files
+### Option 1: IndexedDB + Markdown Export (Selected)
 
 **Pros:**
-- Human-readable and editable
-- Works with any text editor
-- Portable across platforms and devices
-- Git-friendly (can version control memory)
-- Natural fit for in-app viewing/editing features
-- No database dependencies
-- Trivial export (just copy files)
-- Aligns with "cowork" philosophy of transparent tooling
+- Works immediately (no account setup)
+- Large storage capacity
+- Markdown format preserved for transparency
+- Export gives users real .md files they can inspect/edit
+- No infrastructure costs for MVP
+- Path to cloud sync later
 
 **Cons:**
-- Parsing overhead for structured data
-- Potential for user edits to break format
-- No built-in querying (must load full file)
-- Concurrent write handling needed
+- Risk of data loss if browser clears storage
+- No automatic sync between devices
+- Requires user discipline for backups
 
-### Option 2: localStorage / IndexedDB
+### Option 2: Cloud-First (Google Drive / OneDrive)
 
 **Pros:**
-- Built into browsers
-- Fast read/write
-- Structured data support (IndexedDB)
-- No file system access needed
+- Automatic sync across devices
+- Users own their data in familiar location
+- No eviction risk
 
 **Cons:**
-- Browser-only (no desktop filesystem equivalent)
-- Opaque to users (hidden in dev tools)
-- Not portable between browsers
-- Storage limits apply
-- No transparency for users
+- Requires OAuth setup (complexity)
+- Requires account (friction)
+- API costs at scale
+- Network dependency
 
-### Option 3: SQLite
+### Option 3: localStorage Only
 
 **Pros:**
-- Full database capabilities
-- Efficient querying
-- Works on desktop (file-based)
-- Single file storage
+- Simplest implementation
+- Synchronous API
 
 **Cons:**
-- Binary format (not human-readable)
-- Requires SQLite bindings
-- Overkill for simple key-value/list data
-- Users can't inspect without tools
-- Web deployment requires WASM overhead
+- 5-10MB limit
+- Highest eviction risk
+- No good path to scale
 
-### Option 4: JSON Files
+### Option 4: Server-Side Storage
 
 **Pros:**
-- Structured and parseable
-- Widely supported
-- Portable
+- Full control
+- Easy sync
 
 **Cons:**
-- Less human-readable than markdown
-- Harder to edit by hand without breaking
-- No natural document structure for in-app viewing
-- Doesn't leverage markdown tooling
+- Requires user accounts
+- Infrastructure costs
+- Less transparent to users
 
 ## Decision
 
-**We will use markdown files** as the primary storage format for user memory and preferences.
+**We will use IndexedDB as primary storage with markdown as the data format, with prominent export/import functionality and backup reminders.**
 
-### File Structure
+### Phased Approach
 
 ```
-{memory-root}/
-├── prompts.md          # Recent and pinned prompts
-├── preferences.md      # User settings and learned patterns
-└── usage-stats.md      # Frequency data and analytics
+MVP (Phase 1):
+├── IndexedDB stores markdown strings
+├── "Download Memory" → .zip of .md files
+├── "Import Memory" → upload .md files
+├── Request persistent storage on first use
+└── Backup reminder after 7+ days without export
+
+V2 (Phase 2):
+├── Optional Google Drive sync
+├── Optional OneDrive sync
+└── "Connect cloud storage" in settings
 ```
 
-Where `{memory-root}` is:
-- Desktop: `~/.claude-cowork/memory/`
-- Web: Cloud storage path (e.g., `s3://bucket/{user-id}/memory/`)
+### Storage Format
 
-### Format Conventions
+Data is stored in IndexedDB but formatted as markdown strings:
 
-1. **Tables** for structured lists (recent prompts, frequency data)
-2. **YAML frontmatter** for metadata (last updated, version)
-3. **Checkboxes** for pinned/favorite items
-4. **Headers** for logical sections
-5. **ISO timestamps** for all dates
+```typescript
+// IndexedDB structure
+{
+  "prompts.md": "# Prompt Memory\n\n| Prompt | Category |...",
+  "preferences.md": "# User Preferences\n\n...",
+  "usage-stats.md": "# Usage Statistics\n\n..."
+}
+```
+
+When user exports, they get actual `.md` files they can open in any text editor.
 
 ### Storage Abstraction
 
@@ -127,52 +157,147 @@ interface MemoryStore {
   write(filename: string, content: string): Promise<void>;
   exists(filename: string): Promise<boolean>;
   list(): Promise<string[]>;
+  exportAll(): Promise<Blob>;  // Returns .zip
+  importAll(file: File): Promise<void>;
 }
 
-class LocalFileStore implements MemoryStore { /* filesystem */ }
-class CloudFileStore implements MemoryStore { /* S3, etc. */ }
+// MVP implementation
+class IndexedDBStore implements MemoryStore {
+  private db: IDBDatabase;
+  // Stores markdown strings keyed by filename
+}
+
+// Future implementations
+class GoogleDriveStore implements MemoryStore { /* OAuth + Drive API */ }
+class OneDriveStore implements MemoryStore { /* OAuth + Graph API */ }
+class LocalFileStore implements MemoryStore { /* Desktop app */ }
 ```
 
-### Markdown Parsing
+### Persistence Strategy
 
-We will use a lightweight markdown parser that:
-- Extracts tables into structured data
-- Preserves unknown sections during round-trips
-- Validates format on read and warns (not fails) on issues
+```typescript
+// On first use, request persistent storage
+async function requestPersistence(): Promise<boolean> {
+  if (navigator.storage && navigator.storage.persist) {
+    const granted = await navigator.storage.persist();
+    if (granted) {
+      console.log("Storage will not be cleared except by explicit user action");
+    }
+    return granted;
+  }
+  return false;
+}
+```
+
+### Backup Reminder Logic
+
+```typescript
+interface BackupStatus {
+  lastExport: Date | null;
+  lastReminder: Date | null;
+  reminderDismissed: boolean;
+}
+
+function shouldShowBackupReminder(status: BackupStatus): boolean {
+  const daysSinceExport = status.lastExport
+    ? daysBetween(status.lastExport, new Date())
+    : Infinity;
+
+  const daysSinceReminder = status.lastReminder
+    ? daysBetween(status.lastReminder, new Date())
+    : Infinity;
+
+  // Show reminder if:
+  // - Never exported and used for 7+ days, OR
+  // - Last export was 30+ days ago
+  // - And we haven't reminded in the last 7 days
+  return (daysSinceExport > 30 || (daysSinceExport === Infinity && daysSinceReminder > 7))
+    && daysSinceReminder > 7
+    && !status.reminderDismissed;
+}
+```
+
+## File Structure
+
+### Logical Structure (In IndexedDB)
+
+```
+memory/
+├── prompts.md          # Recent and pinned prompts
+├── preferences.md      # User settings and learned patterns
+├── usage-stats.md      # Frequency data and analytics
+└── _meta.json          # Last export date, backup status
+```
+
+### Export Structure (Downloaded .zip)
+
+```
+claude-cowork-memory-2025-01-31.zip
+├── prompts.md
+├── preferences.md
+└── usage-stats.md
+```
 
 ## Rationale
 
-1. **Transparency** - Users can open files in any text editor and see exactly what's stored
-2. **Portability** - Copy files to new device, done
-3. **In-app editing** - Markdown renders beautifully and is easy to edit
-4. **Developer experience** - Debug by reading files, not querying databases
-5. **Future-proof** - Easy path to git-based sync, account storage, or other backends
-6. **Trust** - No black box; users understand the system
-7. **Alignment** - Leverages the tool's natural markdown capabilities
+1. **Zero friction start** - Works immediately, no accounts or setup
+2. **Transparency preserved** - Markdown format, viewable in-app, editable when exported
+3. **User ownership** - Download anytime, take your data anywhere
+4. **No lock-in** - Standard .md files work with any tool
+5. **Progressive enhancement** - Add cloud sync later without changing core logic
+6. **Cost effective** - No server infrastructure for MVP
+7. **Appropriate for audience** - Non-technical users get simple backup/restore
 
 ## Consequences
 
 ### Positive
 
-- Users can view, edit, backup, and share their memory files
-- In-app memory viewer/editor is straightforward to build
-- No database dependencies or migrations
-- Works identically on desktop and web (just different storage backends)
-- Enables future features: version history, memory sharing, team prompts
+- Users can start immediately without accounts
+- Export gives complete data ownership
+- Markdown format enables in-app transparency features
+- Cloud sync can be added as optional enhancement
+- No infrastructure costs for MVP
 
 ### Negative
 
-- Must handle malformed markdown gracefully (user edits)
-- Parsing tables is more work than reading JSON
-- Large history may become slow to parse (mitigate with archival)
-- Concurrent writes need careful handling
+- Users must remember to export (mitigated by reminders)
+- Data loss possible if browser clears storage (mitigated by persistence API + reminders)
+- No automatic multi-device sync in MVP
 
 ### Mitigations
 
-- **Malformed files**: Validate on read, preserve unknown sections, warn user
-- **Performance**: Archive old entries to separate files, lazy load
-- **Concurrency**: File locking on desktop, optimistic locking on web
-- **User errors**: Provide "reset to default" option, backup before user edits
+| Risk | Mitigation |
+|------|------------|
+| Browser eviction | Request persistent storage, show backup reminders |
+| User forgets to export | Periodic reminders, easy one-click export |
+| Data loss | Auto-export to Downloads on significant changes (optional setting) |
+| Multi-device need | V2 cloud sync with Google Drive / OneDrive |
+
+## Future: Cloud Sync (V2)
+
+When we add cloud sync, users will see:
+
+```
+┌─────────────────────────────────────────┐
+│         Storage Settings                │
+├─────────────────────────────────────────┤
+│ Current: Browser storage (local)        │
+│ Last backup: 3 days ago                 │
+│                                         │
+│ [Download Backup]  [Import Backup]      │
+│                                         │
+│ ─────────────────────────────────────── │
+│                                         │
+│ Sync to cloud (optional):               │
+│                                         │
+│ [G] Connect Google Drive                │
+│ [M] Connect OneDrive                    │
+│                                         │
+│ Your memory files will appear in a      │
+│ "Claude Cowork" folder you can access   │
+│ anytime.                                │
+└─────────────────────────────────────────┘
+```
 
 ## Related Decisions
 
@@ -181,6 +306,7 @@ We will use a lightweight markdown parser that:
 
 ## References
 
-- [Markdown Tables Spec](https://github.github.com/gfm/#tables-extension-)
-- [YAML Frontmatter](https://jekyllrb.com/docs/front-matter/)
-- [File System Access API](https://developer.mozilla.org/en-US/docs/Web/API/File_System_Access_API) (for web)
+- [IndexedDB API](https://developer.mozilla.org/en-US/docs/Web/API/IndexedDB_API)
+- [Storage API - persist()](https://developer.mozilla.org/en-US/docs/Web/API/StorageManager/persist)
+- [Google Drive API](https://developers.google.com/drive/api/v3/about-sdk)
+- [Microsoft Graph API - OneDrive](https://docs.microsoft.com/en-us/onedrive/developer/)

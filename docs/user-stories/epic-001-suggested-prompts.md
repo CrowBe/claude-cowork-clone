@@ -2,19 +2,28 @@
 
 **Status:** Draft
 **Created:** 2025-01-31
+**Updated:** 2025-01-31
 **Related ADR:** [ADR-002: Markdown Memory Storage](../architecture/adr-002-markdown-memory-storage.md)
 
 ## Overview
 
 This epic covers the onboarding experience through suggested prompts that evolve from static suggestions to personalized recommendations based on local memory. A core principle is **transparency** - users can always see, understand, and modify how the system remembers and learns from their usage.
 
+### Target Audience
+
+Individuals and small businesses looking to optimize day-to-day actions:
+- Not developers (no git, no technical file management)
+- Google/Microsoft users (familiar with Drive, OneDrive, Docs, Sheets)
+- Productivity-focused (want tools that "just work")
+
 ## Design Principles
 
 1. **Progressive Intelligence** - Start simple with static prompts, grow smarter with use
-2. **Transparency First** - Memory is stored in human-readable markdown files
-3. **User Control** - Users can view, edit, and reset their memory at any time
-4. **Portable Data** - Memory files work across devices and deployments
+2. **Transparency First** - Memory is stored in human-readable markdown format
+3. **User Control** - Users can view, edit, export, and reset their memory at any time
+4. **Portable Data** - Memory exports as standard .md files that work anywhere
 5. **No Black Boxes** - The system explains why it suggests what it suggests
+6. **Zero Friction Start** - Works immediately without accounts or setup
 
 ---
 
@@ -30,7 +39,7 @@ This epic covers the onboarding experience through suggested prompts that evolve
 
 **Acceptance Criteria:**
 - [ ] Empty chat state displays 4-6 prompt chips
-- [ ] Prompts are organized by category (coding, writing, general, creative)
+- [ ] Prompts are organized by category (productivity, writing, analysis, creative)
 - [ ] Clicking a prompt populates the input field
 - [ ] Provider-appropriate prompts shown (Anthropic vs Ollama capabilities)
 - [ ] Prompts are visually distinct and inviting
@@ -40,19 +49,19 @@ This epic covers the onboarding experience through suggested prompts that evolve
 
 ---
 
-#### US-002: Record Prompt Usage to Markdown
+#### US-002: Record Prompt Usage to Local Storage
 
 **As the** system
-**I want** to record prompt usage to a local markdown file
-**So that** data is portable, human-readable, and transparent to users
+**I want** to record prompt usage to browser storage in markdown format
+**So that** data persists between sessions and can be exported as readable files
 
 **Acceptance Criteria:**
-- [ ] Prompt history stored in `memory/prompts.md`
+- [ ] Prompt history stored in IndexedDB as markdown-formatted strings
 - [ ] Uses markdown table format for structured data
 - [ ] Records: prompt text, category, provider, timestamp
-- [ ] Desktop: writes to local filesystem (`~/.claude-cowork/memory/`)
-- [ ] Web: writes to configured cloud storage
-- [ ] File remains valid markdown after every write
+- [ ] Requests persistent storage permission on first use
+- [ ] Data survives browser restart (within eviction limits)
+- [ ] Format matches export structure (prompts.md, preferences.md, usage-stats.md)
 
 **Priority:** High
 **Estimate:** Medium
@@ -70,7 +79,7 @@ This epic covers the onboarding experience through suggested prompts that evolve
 - [ ] One-click to reuse a prompt
 - [ ] Shows relative time ("2 hours ago", "yesterday")
 - [ ] Can dismiss/remove individual items
-- [ ] Synced with `memory/prompts.md` file
+- [ ] Synced with stored memory
 
 **Priority:** High
 **Estimate:** Small
@@ -90,7 +99,7 @@ This epic covers the onboarding experience through suggested prompts that evolve
 - [ ] Top prompts appear in "Favorites" or "Most Used" section
 - [ ] Minimum 3 uses before a prompt surfaces as frequent
 - [ ] Graceful fallback to static prompts if insufficient data
-- [ ] Frequency data visible in `memory/usage-stats.md`
+- [ ] Frequency data visible when viewing memory
 
 **Priority:** Medium
 **Estimate:** Medium
@@ -107,7 +116,7 @@ This epic covers the onboarding experience through suggested prompts that evolve
 - [ ] After 10+ interactions, static prompts blend with personalized ones
 - [ ] Category preferences influence what's shown first
 - [ ] Time-of-day patterns considered (if sufficient data)
-- [ ] Suggestions explain why they're shown ("Based on your coding focus")
+- [ ] Suggestions explain why they're shown ("Based on your productivity focus")
 - [ ] User can reset to defaults at any time
 
 **Priority:** Medium
@@ -117,32 +126,32 @@ This epic covers the onboarding experience through suggested prompts that evolve
 
 ### Transparency & User Control
 
-#### US-006: View Memory Files In-App
+#### US-006: View Memory In-App
 
 **As a** curious user
-**I want** to view my memory files directly within the app
+**I want** to view my memory directly within the app
 **So that** I understand exactly what the system knows about me
 
 **Acceptance Criteria:**
-- [ ] Settings/Memory section shows list of memory files
-- [ ] Click to view rendered markdown content
-- [ ] Syntax highlighting for markdown structure
-- [ ] Shows file location (local path or cloud URL)
-- [ ] Explains what each file contains in plain language
+- [ ] Settings/Memory section shows memory contents
+- [ ] Renders markdown content beautifully
+- [ ] Organized by file (prompts, preferences, usage stats)
+- [ ] Explains what each section contains in plain language
+- [ ] Shows last updated timestamp
 
 **Priority:** High
 **Estimate:** Medium
 
 ---
 
-#### US-007: Edit Memory Files In-App
+#### US-007: Edit Memory In-App
 
 **As a** power user
-**I want** to edit my memory files directly within the app
+**I want** to edit my memory directly within the app
 **So that** I can correct, curate, or customize my preferences
 
 **Acceptance Criteria:**
-- [ ] Edit button opens markdown editor for memory files
+- [ ] Edit button opens markdown editor for memory
 - [ ] Live preview of markdown rendering
 - [ ] Validation warns if edits break expected format
 - [ ] Save confirms changes and reloads memory
@@ -161,10 +170,10 @@ This epic covers the onboarding experience through suggested prompts that evolve
 
 **Acceptance Criteria:**
 - [ ] Hover/tap on suggestion shows explanation tooltip
-- [ ] Explanations like: "You've used this 8 times" or "Popular in coding category"
+- [ ] Explanations like: "You've used this 8 times" or "Popular for productivity"
 - [ ] Static prompts labeled as "Suggested starter"
 - [ ] Personalized prompts labeled as "Based on your history"
-- [ ] Links to relevant memory file for full context
+- [ ] Links to memory view for full context
 
 **Priority:** Medium
 **Estimate:** Small
@@ -180,7 +189,7 @@ This epic covers the onboarding experience through suggested prompts that evolve
 **Acceptance Criteria:**
 - [ ] Settings option to clear prompt memory
 - [ ] Confirmation dialog explains what will be deleted
-- [ ] Option to clear all memory or specific files
+- [ ] Option to clear all memory or specific sections
 - [ ] Resets to static/new-user experience
 - [ ] Does not affect conversation history (separate concern)
 
@@ -189,36 +198,79 @@ This epic covers the onboarding experience through suggested prompts that evolve
 
 ---
 
+### Data Portability (Critical for Local-First)
+
 #### US-010: Export Memory Files
 
-**As a** user switching devices
-**I want** to export my memory files
-**So that** I can transfer my preferences to another installation
+**As a** user who wants to protect my data
+**I want** to export my memory as downloadable files
+**So that** I have a backup and can transfer to another device
 
 **Acceptance Criteria:**
-- [ ] Export button downloads memory folder as zip
+- [ ] "Download Memory" button in settings
+- [ ] Exports as .zip containing .md files (prompts.md, preferences.md, usage-stats.md)
+- [ ] Files are human-readable markdown
 - [ ] Individual file download also available
-- [ ] Import option to load exported memory
-- [ ] Validates imported files before applying
-- [ ] Merge or replace options for existing memory
+- [ ] Export includes timestamp in filename
+- [ ] Works offline
 
-**Priority:** Low
+**Priority:** High (Critical for local-first approach)
+**Estimate:** Small
+
+---
+
+#### US-011: Import Memory Files
+
+**As a** user switching devices or restoring from backup
+**I want** to import previously exported memory files
+**So that** I can restore my preferences and history
+
+**Acceptance Criteria:**
+- [ ] "Import Memory" button in settings
+- [ ] Accepts .zip or individual .md files
+- [ ] Validates file format before applying
+- [ ] Preview of what will be imported
+- [ ] Option to merge with or replace existing memory
+- [ ] Error handling for malformed files (graceful degradation)
+
+**Priority:** High (Critical for local-first approach)
 **Estimate:** Medium
+
+---
+
+#### US-012: Backup Reminder
+
+**As a** user who might forget to backup
+**I want** to be reminded to export my memory periodically
+**So that** I don't lose my preferences if browser data is cleared
+
+**Acceptance Criteria:**
+- [ ] Reminder appears if no export in 30+ days (and memory has data)
+- [ ] Gentle, non-intrusive notification (not modal)
+- [ ] One-click to export from reminder
+- [ ] "Remind me later" dismisses for 7 days
+- [ ] "Don't remind me" option (can re-enable in settings)
+- [ ] Shows last export date in settings
+
+**Priority:** High (Critical for local-first approach)
+**Estimate:** Small
 
 ---
 
 ### Platform Abstraction
 
-#### US-011: Platform-Agnostic Storage Layer
+#### US-013: Platform-Agnostic Storage Layer
 
 **As a** developer
 **I want** a storage abstraction layer
-**So that** memory logic works across desktop (local) and web (cloud) deployments
+**So that** memory logic works across different storage backends
 
 **Acceptance Criteria:**
-- [ ] `MemoryStore` interface abstracts read/write operations
-- [ ] `LocalFileStore` implementation for desktop (filesystem)
-- [ ] `CloudFileStore` implementation for web (S3, GitHub, etc.)
+- [ ] `MemoryStore` interface abstracts read/write/export/import operations
+- [ ] `IndexedDBStore` implementation for web (MVP)
+- [ ] `LocalFileStore` implementation for desktop (future)
+- [ ] `GoogleDriveStore` implementation for cloud sync (V2)
+- [ ] `OneDriveStore` implementation for cloud sync (V2)
 - [ ] Markdown parsing/serialization shared across implementations
 - [ ] Easy to add new storage backends
 
@@ -227,27 +279,102 @@ This epic covers the onboarding experience through suggested prompts that evolve
 
 ---
 
-## Future Considerations
+### Future: Cloud Sync (V2)
 
-These are not committed stories but areas we may explore:
+#### US-014: Optional Google Drive Sync
 
-- **Account-based memory sync** - Memory tied to user accounts for cross-device sync
-- **Memory sharing** - Export/import prompt collections with other users
-- **Team memory** - Shared organizational prompts and preferences
-- **AI-assisted memory curation** - LLM helps organize and clean up memory files
-- **Memory insights dashboard** - Visualizations of usage patterns over time
-- **Version history** - Git-like history of memory file changes
+**As a** user who works across multiple devices
+**I want** to optionally sync my memory to Google Drive
+**So that** my preferences follow me automatically
+
+**Acceptance Criteria:**
+- [ ] "Connect Google Drive" option in settings
+- [ ] OAuth flow with minimal permissions (app folder only)
+- [ ] Creates "Claude Cowork" folder in user's Drive
+- [ ] Memory files visible in Drive (user can browse/edit)
+- [ ] Automatic sync on changes
+- [ ] Works alongside local storage (cloud is backup)
+- [ ] Disconnect option removes sync but keeps local data
+
+**Priority:** Low (V2)
+**Estimate:** Large
+
+---
+
+#### US-015: Optional OneDrive Sync
+
+**As a** Microsoft/Office 365 user
+**I want** to optionally sync my memory to OneDrive
+**So that** my preferences integrate with my existing workflow
+
+**Acceptance Criteria:**
+- [ ] "Connect OneDrive" option in settings
+- [ ] OAuth flow with minimal permissions
+- [ ] Creates "Claude Cowork" folder in user's OneDrive
+- [ ] Memory files visible in OneDrive
+- [ ] Automatic sync on changes
+- [ ] Works alongside local storage
+- [ ] Disconnect option available
+
+**Priority:** Low (V2)
+**Estimate:** Large
+
+---
+
+## Phased Delivery
+
+### MVP (Phase 1)
+| ID | Story | Priority |
+|----|-------|----------|
+| US-001 | Static Welcome Prompts | High |
+| US-002 | Record Prompt Usage to Local Storage | High |
+| US-003 | Recently Used Prompts | High |
+| US-010 | Export Memory Files | High |
+| US-011 | Import Memory Files | High |
+| US-012 | Backup Reminder | High |
+| US-013 | Platform-Agnostic Storage Layer | High |
+
+### Phase 2: Personalization
+| ID | Story | Priority |
+|----|-------|----------|
+| US-004 | Frequently Used Prompts Surface | Medium |
+| US-005 | Personalized Suggestions | Medium |
+| US-006 | View Memory In-App | High |
+
+### Phase 3: Power Users
+| ID | Story | Priority |
+|----|-------|----------|
+| US-007 | Edit Memory In-App | Medium |
+| US-008 | Explain Why This Suggestion | Medium |
+| US-009 | Clear/Reset Memory | High |
+
+### Phase 4: Cloud Sync (V2)
+| ID | Story | Priority |
+|----|-------|----------|
+| US-014 | Optional Google Drive Sync | Low |
+| US-015 | Optional OneDrive Sync | Low |
 
 ---
 
 ## File Structure
 
+### In Browser (IndexedDB)
+
 ```
-Desktop (~/.claude-cowork/):        Web (cloud storage):
-memory/                             {user-id}/memory/
-├── prompts.md                      ├── prompts.md
-├── preferences.md                  ├── preferences.md
-└── usage-stats.md                  └── usage-stats.md
+Keys stored in IndexedDB:
+├── "prompts.md"        → markdown string
+├── "preferences.md"    → markdown string
+├── "usage-stats.md"    → markdown string
+└── "_meta"             → { lastExport, lastReminder, ... }
+```
+
+### Export Structure (.zip download)
+
+```
+claude-cowork-memory-2025-01-31.zip
+├── prompts.md
+├── preferences.md
+└── usage-stats.md
 ```
 
 ### prompts.md
@@ -261,13 +388,13 @@ Last updated: 2025-01-31T10:30:00Z
 
 | Prompt | Category | Provider | Used |
 |--------|----------|----------|------|
-| Review this code for bugs | coding | anthropic | 2025-01-31T09:15:00Z |
-| Summarize this document | writing | ollama | 2025-01-31T08:30:00Z |
+| Summarize this email thread | productivity | anthropic | 2025-01-31T09:15:00Z |
+| Draft a response to this client | writing | anthropic | 2025-01-31T08:30:00Z |
 
 ## Pinned Prompts
 
-- [x] Code review checklist
-- [ ] Morning standup template
+- [x] Weekly report template
+- [ ] Meeting notes formatter
 ```
 
 ### preferences.md
@@ -279,7 +406,7 @@ Last updated: 2025-01-31T10:30:00Z
 
 ## Learned Patterns
 
-- **Primary categories:** coding, debugging
+- **Primary categories:** productivity, writing
 - **Preferred provider:** anthropic
 - **Peak usage hours:** 9am-12pm, 2pm-5pm
 
@@ -301,14 +428,14 @@ Last updated: 2025-01-31T10:30:00Z
 
 | Prompt | Uses | Last Used | Category |
 |--------|------|-----------|----------|
-| Review this code for bugs | 12 | 2025-01-31 | coding |
-| Explain this error | 8 | 2025-01-30 | debugging |
+| Summarize this email thread | 15 | 2025-01-31 | productivity |
+| Help me draft a response | 12 | 2025-01-30 | writing |
 
 ## Category Breakdown
 
-- coding: 45 uses (52%)
+- productivity: 45 uses (52%)
 - writing: 20 uses (23%)
-- general: 15 uses (17%)
+- analysis: 15 uses (17%)
 - creative: 7 uses (8%)
 ```
 
@@ -319,5 +446,21 @@ Last updated: 2025-01-31T10:30:00Z
 - **Onboarding completion** - % of new users who send first message within 30 seconds
 - **Prompt suggestion usage** - % of conversations started via suggested prompt
 - **Return user engagement** - Do personalized suggestions increase session frequency?
-- **Memory transparency engagement** - % of users who view their memory files
+- **Export adoption** - % of users who export at least once
+- **Data safety** - % of users with recent backup (< 30 days)
+- **Memory transparency engagement** - % of users who view their memory
 - **Trust indicators** - User feedback on understanding/trusting the system
+
+---
+
+## Future Considerations
+
+These are not committed stories but areas we may explore:
+
+- **Account-based memory sync** - Memory tied to user accounts for cross-device sync
+- **Memory sharing** - Export/import prompt collections with other users
+- **Team memory** - Shared organizational prompts and preferences
+- **AI-assisted memory curation** - LLM helps organize and clean up memory files
+- **Memory insights dashboard** - Visualizations of usage patterns over time
+- **Version history** - Git-like history of memory file changes
+- **Auto-backup to cloud** - Automatic periodic backup to connected cloud storage
