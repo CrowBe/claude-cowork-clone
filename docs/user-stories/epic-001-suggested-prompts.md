@@ -9,21 +9,7 @@
 
 This epic covers the onboarding experience through suggested prompts that evolve from static suggestions to personalized recommendations based on local memory. A core principle is **transparency** - users can always see, understand, and modify how the system remembers and learns from their usage.
 
-### Target Audience
-
-Individuals and small businesses looking to optimize day-to-day actions:
-- Not developers (no git, no technical file management)
-- Google/Microsoft users (familiar with Drive, OneDrive, Docs, Sheets)
-- Productivity-focused (want tools that "just work")
-
-## Design Principles
-
-1. **Progressive Intelligence** - Start simple with static prompts, grow smarter with use
-2. **Transparency First** - Memory is stored in human-readable markdown format
-3. **User Control** - Users can view, edit, export, and reset their memory at any time
-4. **Portable Data** - Memory exports as standard .md files that work anywhere
-5. **No Black Boxes** - The system explains why it suggests what it suggests
-6. **Zero Friction Start** - Works immediately without accounts or setup
+See [docs/README](../README.md) for design principles, target audience, and local-first philosophy.
 
 ---
 

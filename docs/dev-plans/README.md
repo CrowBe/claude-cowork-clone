@@ -16,10 +16,65 @@ Defining user stories, system architecture, and initial technical decisions.
 
 ## Roadmap Overview
 
-1. **Phase 0** - Planning & Architecture
-2. **Phase 1** - Core LLM abstraction layer
-3. **Phase 2** - Anthropic backend integration
-4. **Phase 3** - Ollama backend integration
-5. **Phase 4** - Basic cowork interface
-6. **Phase 5** - Conversation persistence
-7. **Phase 6** - Polish & extended features
+### Phase 0: Planning & Architecture (Current)
+- Define user stories and acceptance criteria
+- Document architectural decisions (ADRs)
+- Establish design principles and target audience
+
+### Phase 1: Foundation
+Core infrastructure and MVP features.
+
+| Track | Work |
+|-------|------|
+| **LLM Layer** | Core abstraction using Vercel AI SDK |
+| **Storage Layer** | IndexedDB with markdown format |
+| **UI** | Basic chat interface |
+
+**User Stories:** US-001, US-002, US-003, US-010, US-011, US-012, US-013
+
+### Phase 2: LLM Integration
+Connect to LLM providers.
+
+| Track | Work |
+|-------|------|
+| **Anthropic** | Claude integration via @ai-sdk/anthropic |
+| **Ollama** | Local LLM integration via ai-sdk-ollama |
+| **Personalization** | Frequently used prompts, pattern learning |
+
+**User Stories:** US-004, US-005, US-006
+
+### Phase 3: Power Features
+Advanced user control and transparency.
+
+| Track | Work |
+|-------|------|
+| **Memory Editing** | In-app markdown editor for memory files |
+| **Explainability** | "Why this suggestion?" tooltips |
+| **Privacy Controls** | Clear/reset memory |
+
+**User Stories:** US-007, US-008, US-009
+
+### Phase 4: Cloud Sync (V2)
+Optional cloud storage integration.
+
+| Track | Work |
+|-------|------|
+| **Google Drive** | OAuth + Drive API integration |
+| **OneDrive** | OAuth + Graph API integration |
+
+**User Stories:** US-014, US-015
+
+### Phase 5: Polish & Extended Features
+Refinements based on user feedback.
+
+| Track | Work |
+|-------|------|
+| **Conversation Persistence** | Save/load chat history |
+| **Context Management** | Cross-session context |
+| **Team Features** | Shared prompt libraries (future) |
+
+## Related Documentation
+
+- [User Stories](../user-stories/) - Feature requirements by phase
+- [Architecture Decisions](../architecture/) - Technical decisions (ADRs)
+- [API Documentation](../api/) - Interface specifications

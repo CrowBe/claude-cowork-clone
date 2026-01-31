@@ -22,23 +22,7 @@ Each user story follows this template:
 |------|-------------|--------|
 | [Epic 001: Suggested Prompts & Transparent Memory](./epic-001-suggested-prompts.md) | Onboarding experience with intelligent prompts and user-visible memory | Draft |
 
-## Design Principles
-
-Our user stories are guided by these principles:
-
-1. **Transparency First** - Users can always see what the system knows about them
-2. **Progressive Intelligence** - Features start simple and grow smarter with use
-3. **User Control** - Users can view, edit, export, and reset any stored data
-4. **Portable Data** - Memory exports as standard .md files that work anywhere
-5. **No Black Boxes** - The system explains its reasoning
-6. **Zero Friction Start** - Works immediately without accounts or setup
-
-## Target Audience
-
-Individuals and small businesses looking to optimize day-to-day actions:
-- Not developers (no git, no technical file management)
-- Google/Microsoft users (familiar with Drive, OneDrive, Docs, Sheets)
-- Productivity-focused (want tools that "just work")
+See [docs/README](../README.md) for design principles, target audience, and local-first philosophy.
 
 ## Stories by Epic
 
