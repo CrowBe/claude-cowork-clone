@@ -2,38 +2,48 @@
 
 import { useState, useEffect } from "react";
 
-interface OllamaStatus {
-  status: "checking" | "connected" | "disconnected";
+type ConnectionStatus = "checking" | "connected" | "disconnected";
+
+interface OllamaStatusState {
+  status: ConnectionStatus;
   models: string[];
   message?: string;
 }
 
-export function useOllamaStatus() {
-  const [ollamaStatus, setOllamaStatus] = useState<OllamaStatus>({
-    status: "checking",
-    models: [],
-  });
+interface OllamaStatusResponse {
+  status: string;
+  models?: string[];
+  message?: string;
+}
 
-  useEffect(() => {
-    async function checkStatus() {
+const INITIAL_STATE: OllamaStatusState = {
+  status: "checking",
+  models: [],
+};
+
+export function useOllamaStatus(): OllamaStatusState {
+  const [state, setState] = useState<OllamaStatusState>(INITIAL_STATE);
+
+  useEffect(function checkOllamaConnection() {
+    async function fetchStatus(): Promise<void> {
       try {
         const response = await fetch("/api/ollama/status");
-        const data = await response.json();
+        const data: OllamaStatusResponse = await response.json();
 
         if (response.ok) {
-          setOllamaStatus({
+          setState({
             status: "connected",
-            models: data.models || [],
+            models: data.models ?? [],
           });
         } else {
-          setOllamaStatus({
+          setState({
             status: "disconnected",
             models: [],
             message: data.message,
           });
         }
       } catch {
-        setOllamaStatus({
+        setState({
           status: "disconnected",
           models: [],
           message: "Failed to check Ollama status",
@@ -41,8 +51,8 @@ export function useOllamaStatus() {
       }
     }
 
-    checkStatus();
+    fetchStatus();
   }, []);
 
-  return ollamaStatus;
+  return state;
 }

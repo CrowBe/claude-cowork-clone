@@ -1,12 +1,14 @@
 import { streamText } from "ai";
 import { createOpenAI } from "@ai-sdk/openai";
 
+const OLLAMA_BASE_URL = process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1";
+
 const ollama = createOpenAI({
-  baseURL: process.env.OLLAMA_BASE_URL || "http://localhost:11434/v1",
-  apiKey: "ollama", // Ollama doesn't require a real key
+  baseURL: OLLAMA_BASE_URL,
+  apiKey: "ollama",
 });
 
-export async function POST(req: Request) {
+export async function POST(req: Request): Promise<Response> {
   const { messages } = await req.json();
 
   const result = streamText({
