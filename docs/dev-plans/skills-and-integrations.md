@@ -2,7 +2,7 @@
 
 **Status:** Draft
 **Date:** 2026-02-02
-**Related:** ADR-003 (Chat UI Library), ADR-001 (LLM SDK Selection)
+**Related:** ADR-008 (Skills Architecture), ADR-003 (Chat UI Library), ADR-001 (LLM SDK Selection)
 
 ## Overview
 
@@ -17,6 +17,78 @@ Following the project's local-first philosophy:
 3. **Progressive Enhancement** - Start with basic skills, add complexity as needed
 4. **User Control** - All tool executions require transparency; sensitive actions need approval
 5. **MCP Extensibility** - Leverage MCP protocol for third-party tool ecosystem
+6. **Context Efficiency** - Minimize token usage through lazy-loading tool discovery
+
+---
+
+## Lazy-Loading Tool Discovery
+
+### Problem
+
+Sending all tool definitions with every LLM request wastes context tokens. With 20+ skills, tool schemas alone consume ~3000 tokens per request—even for conversations that never use tools.
+
+### Solution: Discovery-Based Loading
+
+By default, only a `discover_skills` meta-tool is included in the context. Skills are loaded on-demand as the conversation requires them.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Initial Context (~200 tokens)                 │
+│                                                                  │
+│   Tools: [ discover_skills ]                                    │
+│                                                                  │
+│   System prompt includes:                                       │
+│   "Use discover_skills when you need to perform actions like    │
+│   calculations, saving notes, web search, or other tasks."      │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### Discovery Flow
+
+```
+User: "Can you help me calculate compound interest?"
+
+Turn 1:
+├─ LLM sees: [ discover_skills ]
+├─ LLM calls: discover_skills({ query: "calculation math" })
+└─ Result: { skills: [calculator], message: "Found 1 skill. Now available." }
+
+Turn 2:
+├─ LLM sees: [ discover_skills, calculator ]  ◄── Injected
+├─ LLM calls: calculator({ expression: "1000 * (1 + 0.05)^10" })
+└─ Result: { result: "1628.89" }
+
+Turn 3+:
+├─ LLM sees: [ discover_skills, calculator ]  ◄── Persists
+└─ Calculator remains available for rest of conversation
+```
+
+### Context Efficiency
+
+| Scenario | All Tools Upfront | Discovery Pattern |
+|----------|-------------------|-------------------|
+| Initial request | ~3000 tokens | ~200 tokens |
+| Conversation using 0 tools | ~3000 tokens | ~200 tokens |
+| Conversation using 3 tools | ~3000 tokens | ~650 tokens |
+| 50+ skills installed | ~7500+ tokens | ~200 tokens (initial) |
+
+### Frequently-Used Tools (Future)
+
+Once we collect usage analytics, commonly-used tools may be pre-loaded:
+
+```typescript
+// Data-driven default tools (future implementation)
+async function getDefaultTools(): Promise<string[]> {
+  const analytics = await getSkillUsageAnalytics();
+
+  // Include tools used in 30%+ of conversations
+  return analytics
+    .filter(s => s.conversationUsageRate >= 0.30)
+    .map(s => s.skillId);
+}
+```
+
+This ensures we only add tools to the default context when actual usage justifies the token cost. Initially, we start with discovery-only and let data guide which tools (if any) deserve default inclusion.
 
 ---
 
@@ -155,6 +227,112 @@ Deep integrations with external platforms. Each requires explicit authorization.
 
 ## Implementation Details
 
+### Discovery Tool (Always Available)
+
+```typescript
+// src/lib/skills/discover.ts
+import { tool } from 'ai';
+import { z } from 'zod';
+import { skillRegistry } from './registry';
+
+export const discoverSkillsTool = tool({
+  description: `Search for available skills to help with a task. Use this when you need
+    capabilities like: calculations, note-taking, task management, web search, file reading,
+    diagram generation, code execution, or other actions beyond conversation.`,
+  parameters: z.object({
+    query: z.string().describe('What capability you need (e.g., "math", "save notes", "search web")'),
+    category: z.enum(['all', 'productivity', 'developer', 'network', 'integrations'])
+      .optional()
+      .default('all')
+      .describe('Filter by category'),
+  }),
+  execute: async ({ query, category }) => {
+    const matches = skillRegistry.search(query, {
+      category: category === 'all' ? undefined : category,
+      enabledOnly: true,
+    });
+
+    // Track discovery for analytics (future)
+    await trackSkillDiscovery(query, matches.map(s => s.id));
+
+    return {
+      skills: matches.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        tier: s.tier,
+      })),
+      message: matches.length > 0
+        ? `Found ${matches.length} skill(s). They are now available for use.`
+        : `No matching skills found. Try: productivity, developer, network, or integrations.`,
+    };
+  },
+});
+```
+
+### Conversation Tool State
+
+```typescript
+// src/lib/skills/conversation-state.ts
+export interface ConversationToolState {
+  conversationId: string;
+  loadedSkills: Set<string>;
+  discoveryHistory: Array<{ query: string; results: string[]; timestamp: Date }>;
+}
+
+export class ConversationToolManager {
+  private state: ConversationToolState;
+
+  constructor(conversationId: string) {
+    this.state = {
+      conversationId,
+      loadedSkills: new Set(),
+      discoveryHistory: [],
+    };
+  }
+
+  // Called when discover_skills returns results
+  onSkillsDiscovered(query: string, skillIds: string[]) {
+    for (const id of skillIds) {
+      this.state.loadedSkills.add(id);
+    }
+    this.state.discoveryHistory.push({
+      query,
+      results: skillIds,
+      timestamp: new Date(),
+    });
+  }
+
+  // Build tools array for each LLM request
+  getToolsForRequest(): CoreTool[] {
+    const tools: CoreTool[] = [discoverSkillsTool];
+
+    // Add all skills discovered in this conversation
+    for (const skillId of this.state.loadedSkills) {
+      const skill = skillRegistry.get(skillId);
+      if (skill?.enabled && skill.tool) {
+        tools.push(skill.tool);
+      }
+    }
+
+    return tools;
+  }
+
+  // Get list of loaded skill names (for UI display)
+  getLoadedSkillNames(): string[] {
+    return Array.from(this.state.loadedSkills)
+      .map(id => skillRegistry.get(id)?.name)
+      .filter(Boolean) as string[];
+  }
+
+  // Reset when conversation ends
+  reset() {
+    this.state.loadedSkills.clear();
+    this.state.discoveryHistory = [];
+  }
+}
+```
+
 ### Built-in Skills (Vercel AI SDK)
 
 ```typescript
@@ -212,11 +390,19 @@ export interface SkillDefinition {
   id: string;
   name: string;
   description: string;
+  keywords: string[];  // For search matching
   tier: 'core' | 'enhanced' | 'network' | 'integration';
+  category: 'productivity' | 'developer' | 'network' | 'integrations';
   requiresApproval: boolean;
   requiresNetwork: boolean;
   enabled: boolean;
   tool: CoreTool;
+}
+
+interface SearchOptions {
+  category?: string;
+  tier?: string;
+  enabledOnly?: boolean;
 }
 
 export class SkillRegistry {
@@ -226,13 +412,43 @@ export class SkillRegistry {
     this.skills.set(skill.id, skill);
   }
 
+  get(id: string): SkillDefinition | undefined {
+    return this.skills.get(id);
+  }
+
+  // Search skills by query string and optional filters
+  search(query: string, options: SearchOptions = {}): SkillDefinition[] {
+    const queryLower = query.toLowerCase();
+    const queryTerms = queryLower.split(/\s+/);
+
+    return Array.from(this.skills.values())
+      .filter(skill => {
+        // Apply filters
+        if (options.enabledOnly && !skill.enabled) return false;
+        if (options.category && skill.category !== options.category) return false;
+        if (options.tier && skill.tier !== options.tier) return false;
+
+        // Match against name, description, and keywords
+        const searchText = [
+          skill.name,
+          skill.description,
+          ...skill.keywords,
+        ].join(' ').toLowerCase();
+
+        // All query terms must match somewhere
+        return queryTerms.every(term => searchText.includes(term));
+      })
+      .slice(0, 10);  // Limit results to prevent context bloat
+  }
+
   getEnabledSkills(): SkillDefinition[] {
     return Array.from(this.skills.values())
       .filter(s => s.enabled);
   }
 
-  getToolsForLLM(): CoreTool[] {
-    return this.getEnabledSkills().map(s => s.tool);
+  // List all skills for settings UI
+  getAllSkills(): SkillDefinition[] {
+    return Array.from(this.skills.values());
   }
 }
 ```
@@ -433,18 +649,22 @@ export function ToolApprovalDialog({
 ## Implementation Phases
 
 ### Phase 1: Core Skills Foundation
-- [ ] Implement SkillRegistry and PermissionManager
+- [ ] Implement SkillRegistry with search functionality
+- [ ] Implement discover_skills meta-tool
+- [ ] Implement ConversationToolManager for lazy-loading
 - [ ] Create calculator skill (math.js integration)
 - [ ] Create note-taking skill (IndexedDB storage)
 - [ ] Create task management skill
-- [ ] Add skills to chat API route
+- [ ] Integrate with chat API route (tools per conversation)
 - [ ] Basic tool result rendering in chat
+- [ ] PermissionManager for skill enable/disable
 
 ### Phase 2: Enhanced Skills
 - [ ] Sandboxed code execution (JavaScript via iframe)
 - [ ] File System Access API integration
 - [ ] PDF/document parsing
 - [ ] Diagram generation (Mermaid)
+- [ ] Tool approval workflow UI
 
 ### Phase 3: Network Skills
 - [ ] Web search integration (SearXNG or Brave)
@@ -455,7 +675,7 @@ export function ToolApprovalDialog({
 ### Phase 4: MCP Integration
 - [ ] MCP Client SDK integration
 - [ ] MCP server configuration UI
-- [ ] Tool discovery and registration
+- [ ] MCP tool discovery (auto-register with SkillRegistry)
 - [ ] MCP Apps rendering (@mcp-ui/client)
 
 ### Phase 5: External Integrations
@@ -463,6 +683,13 @@ export function ToolApprovalDialog({
 - [ ] Google Calendar integration
 - [ ] GitHub integration
 - [ ] Notion/Linear integrations
+
+### Phase 6: Analytics & Optimization
+- [ ] Track skill discovery queries and results
+- [ ] Track skill usage per conversation
+- [ ] Implement usage analytics storage
+- [ ] Data-driven default tools (based on usage threshold)
+- [ ] Skill recommendation improvements
 
 ---
 
@@ -502,11 +729,22 @@ export enum PermissionLevel {
 
 ## Success Metrics
 
+### Discovery Efficiency
+- **Discovery Rate**: % of conversations that use discover_skills
+- **Discovery Success**: % of discoveries that lead to tool usage
+- **Context Savings**: Average tokens saved vs all-tools-upfront approach
+- **Discovery-to-Use Latency**: Turns between discovery and first tool use
+
+### Skill Adoption
 - **Skill Adoption**: % of users enabling each skill tier
+- **Conversation Usage Rate**: % of conversations using each skill (for default tool analysis)
 - **Approval Rate**: Tool approval vs denial ratio
 - **Completion Rate**: Successful tool executions / total attempts
+
+### Privacy & Platform
 - **Privacy Preference**: % of users using local-only vs network skills
 - **MCP Adoption**: Number of custom MCP servers configured
+- **Default Tool Candidates**: Skills exceeding 30% conversation usage (future)
 
 ---
 

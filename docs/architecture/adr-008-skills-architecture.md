@@ -290,6 +290,148 @@ class MCPSkillAdapter {
 3. **Tool Result Display** - Show tool inputs/outputs in chat
 4. **MCP Server Config** - Add and manage MCP servers
 
+### Lazy-Loading Tool Discovery
+
+To avoid context bloat from sending all tool definitions with every request, we implement a **discovery-based pattern** where tools are loaded on-demand during conversations.
+
+#### Problem
+
+Sending 20+ tool schemas with every LLM request wastes context tokens on capabilities that may never be used. As the skill library grows, this becomes increasingly inefficient.
+
+#### Solution: Discovery Tool
+
+By default, only a `discover_skills` meta-tool is included in the system context. The LLM uses this to find and load relevant tools as needed.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    Default Context (Minimal)                     │
+│                                                                  │
+│   Tools: [ discover_skills ]                                    │
+│                                                                  │
+│   System: "Use discover_skills to find capabilities when you    │
+│   need to perform actions like calculations, saving notes,      │
+│   searching the web, or other tasks."                           │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │  User: "What's 15% of 847?"
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│   LLM calls: discover_skills({ query: "math calculation" })     │
+│                                                                  │
+│   Result: {                                                     │
+│     skills: [{ id: "calculator", name: "Calculator", ... }],    │
+│     message: "Found 1 skill. It's now available for use."       │
+│   }                                                             │
+└─────────────────────────────────────────────────────────────────┘
+                              │
+                              │  Tool injected into conversation
+                              ▼
+┌─────────────────────────────────────────────────────────────────┐
+│                    Next Turn Context                             │
+│                                                                  │
+│   Tools: [ discover_skills, calculator ]  ◄── Now available    │
+│                                                                  │
+│   LLM calls: calculator({ expression: "847 * 0.15" })           │
+│   Result: { result: "127.05" }                                  │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+#### Discovery Tool Implementation
+
+```typescript
+const discoverSkillsTool = tool({
+  description: `Search for available skills to help with a task. Use this when
+    you need capabilities like: calculations, note-taking, task management,
+    web search, file reading, diagram generation, or other actions.`,
+  parameters: z.object({
+    query: z.string().describe('What capability you need'),
+    category: z.enum(['all', 'productivity', 'developer', 'network', 'integrations'])
+      .optional()
+      .describe('Filter by category'),
+  }),
+  execute: async ({ query, category }) => {
+    const matches = skillRegistry.search(query, { category, enabledOnly: true });
+    return {
+      skills: matches.map(s => ({
+        id: s.id,
+        name: s.name,
+        description: s.description,
+        tier: s.tier,
+      })),
+      message: matches.length > 0
+        ? `Found ${matches.length} skill(s). They are now available for use.`
+        : `No matching skills found. Available categories: productivity, developer, network, integrations.`,
+    };
+  },
+});
+```
+
+#### Conversation State Management
+
+```typescript
+interface ConversationToolState {
+  loadedSkills: Set<string>;  // Skills discovered in this conversation
+}
+
+class ConversationToolManager {
+  private state: ConversationToolState = { loadedSkills: new Set() };
+
+  // Called when discover_skills returns results
+  onSkillsDiscovered(skillIds: string[]) {
+    for (const id of skillIds) {
+      this.state.loadedSkills.add(id);
+    }
+  }
+
+  // Build tools array for each LLM request
+  getToolsForRequest(): CoreTool[] {
+    const tools: CoreTool[] = [discoverSkillsTool];
+
+    // Add all discovered skills for this conversation
+    for (const skillId of this.state.loadedSkills) {
+      const skill = skillRegistry.get(skillId);
+      if (skill?.tool) {
+        tools.push(skill.tool);
+      }
+    }
+
+    return tools;
+  }
+
+  // Reset when conversation ends
+  reset() {
+    this.state.loadedSkills.clear();
+  }
+}
+```
+
+#### Context Size Benefits
+
+| Scenario | All Tools Upfront | Discovery Pattern |
+|----------|-------------------|-------------------|
+| Initial request | ~3000 tokens | ~200 tokens |
+| After using 3 tools | ~3000 tokens | ~650 tokens |
+| Conversation needing no tools | ~3000 tokens | ~200 tokens |
+| 50+ skills available | ~7500+ tokens | ~200 tokens (initial) |
+
+#### Future: Frequently-Used Tools
+
+Once we have usage analytics, commonly-used tools may be included by default to reduce discovery overhead:
+
+```typescript
+// Future implementation after gathering usage data
+const FREQUENTLY_USED_THRESHOLD = 0.3;  // Used in 30%+ of conversations
+
+async function getDefaultTools(): Promise<string[]> {
+  const analytics = await getSkillUsageAnalytics();
+  return analytics
+    .filter(s => s.usageRate >= FREQUENTLY_USED_THRESHOLD)
+    .map(s => s.skillId);
+}
+```
+
+This data-driven approach ensures we only add tools to the default context when their usage justifies the token cost.
+
 ## Consequences
 
 ### Positive
